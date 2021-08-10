@@ -1,8 +1,13 @@
 ---
 title: "Generative Adversarial Network"
 author: "João Vitor F Cavalcante"
-date: "09/08/2021"
-output: html_document
+date: "11/08/2021"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    theme: united
 ---
 
 ```{r setup, include=FALSE}
@@ -10,3 +15,74 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## Building the model
+
+```{r}
+library(readxl)
+library(dplyr)
+library(keras)
+library(caret)
+library(tensorflow)
+
+dataset <- read_excel("data/pcDF.xlsx") 
+
+set.seed(1024)
+
+partitioned <- createDataPartition(y = dataset$attack_cat, p = 0.8, list = FALSE)
+
+training <- dataset[partitioned, -ncol(dataset)]
+training_y <- dataset[partitioned, ncol(dataset)]
+testing <- dataset[-partitioned, -ncol(dataset)]
+testing_y <- dataset[-partitioned, ncol(dataset)]
+
+
+batch_size <- 32
+noise_dim <- 32
+dimen <- 128
+
+log_step <- 100
+epochs <- 50
+learning_rate <- 5e-4
+
+noise <- matrix(rnorm(240),nrow=24)
+```
+
+### Generator Network
+
+```{r}
+gen_nn_i <- layer_input(shape = 10)
+gen_nn_o <- gen_nn_i %>% 
+  layer_dense(dimen, activation = "relu", kernel_initializer = "he_uniform", input_shape = noise_dim) %>% 
+  layer_dense(ncol(training), activation = "linear")
+gen_nn <- keras_model(gen_nn_i, gen_nn_o)
+
+fake <- gen_nn %>% predict(noise)
+```
+
+### Discriminator Network
+
+# TODO
+
+```{r}
+dis_nn_i <- layer_input(shape = c(dim(train_x)[2], dim(train_x)[3], 1))
+
+dis_nn_o <- dis_nn_i %>%
+  layer_dense(units = 600 * 10 * 40) %>%
+  layer_activation_leaky_relu() %>%
+  layer_conv_2d(filters = 600, kernel_size = 3, padding = "same") %>%
+  layer_activation_relu() %>%
+  layer_conv_2d_transpose(filters = 600, kernel_size = 3, strides = 5, padding = "same") %>%
+  layer_activation_relu() %>%
+  layer_conv_2d(filters = 600, kernel_size = 3, padding = "same") %>%
+  layer_activation_leaky_relu() %>%
+  layer_conv_2d(filters = 1, kernel_size = 3, activation = "sigmoid", padding = "same")
+
+dis_nn %>% 
+  compile(optimizer = 'rmsprop', loss = 'binary_crossentropy')
+```
+
+```{r}
+
+```
+
+
+

@@ -23,15 +23,19 @@ library(keras)
 library(caret)
 library(tensorflow)
 
-dataset <- read_excel("data/pcDF.xlsx") 
+dataset <- read_excel("data/pcDF.xlsx")
 
 set.seed(1024)
 
-partitioned <- createDataPartition(y = dataset$attack_cat, p = 0.8, list = FALSE)
+partitioned <-
+  createDataPartition(y = dataset$attack_cat,
+                      p = 0.8,
+                      list = FALSE)
 
-training <- dataset[partitioned, -ncol(dataset)]
-training_y <- dataset[partitioned, ncol(dataset)]
-testing <- dataset[-partitioned, -ncol(dataset)]
+training <- dataset[partitioned,-ncol(dataset)]
+training_y <- dataset[partitioned, ncol(dataset)] %>%
+  mutate(attack_cat = 1)
+testing <- dataset[-partitioned,-ncol(dataset)]
 testing_y <- dataset[-partitioned, ncol(dataset)]
 
 
@@ -43,15 +47,20 @@ log_step <- 100
 epochs <- 50
 learning_rate <- 5e-4
 
-noise <- matrix(rnorm(240),nrow=24)
+noise <- matrix(rnorm(240), nrow = 24)
 ```
 
 ### Generator Network
 
 ```{r}
-gen_nn_i <- layer_input(shape = 10)
-gen_nn_o <- gen_nn_i %>% 
-  layer_dense(dimen, activation = "relu", kernel_initializer = "he_uniform", input_shape = noise_dim) %>% 
+gen_nn_i <- layer_input(shape = dim(noise)[2])
+gen_nn_o <- gen_nn_i %>%
+  layer_dense(
+    dimen,
+    activation = "relu",
+    kernel_initializer = "he_uniform",
+    input_shape = noise_dim
+  ) %>%
   layer_dense(ncol(training), activation = "linear")
 gen_nn <- keras_model(gen_nn_i, gen_nn_o)
 
@@ -60,28 +69,85 @@ fake <- gen_nn %>% predict(noise)
 
 ### Discriminator Network
 
-# TODO
-
 ```{r}
-dis_nn_i <- layer_input(shape = c(dim(train_x)[2], dim(train_x)[3], 1))
+dis_nn_i <- layer_input(shape = 24)
 
 dis_nn_o <- dis_nn_i %>%
-  layer_dense(units = 600 * 10 * 40) %>%
-  layer_activation_leaky_relu() %>%
-  layer_conv_2d(filters = 600, kernel_size = 3, padding = "same") %>%
-  layer_activation_relu() %>%
-  layer_conv_2d_transpose(filters = 600, kernel_size = 3, strides = 5, padding = "same") %>%
-  layer_activation_relu() %>%
-  layer_conv_2d(filters = 600, kernel_size = 3, padding = "same") %>%
-  layer_activation_leaky_relu() %>%
-  layer_conv_2d(filters = 1, kernel_size = 3, activation = "sigmoid", padding = "same")
+  layer_dense(
+    dimen,
+    activation = 'relu',
+    kernel_initializer = "he_uniform",
+    input_shape = noise_dim
+  ) %>%
+  layer_dense(1, activation = "sigmoid")
 
-dis_nn %>% 
-  compile(optimizer = 'rmsprop', loss = 'binary_crossentropy')
+dis_nn <- keras_model(dis_nn_i, dis_nn_o)
+
+dis_nn %>%
+  compile(optimizer = 'adam',
+          loss = 'binary_crossentropy',
+          metrics = "accuracy")
 ```
 
 ```{r}
+gan_i <- layer_input(shape = 10)
+gan_o <- gan_i %>%
+  gen_nn %>%
+  dis_nn
 
+gan <- keras_model(gan_i, gan_o)
+
+gan %>% compile(optimizer = "rmsprop", loss = "binary_crossentropy")
+```
+
+## Training
+
+```{r}
+# TODO
+
+b <- 10
+
+numb <- floor(nrow(training) / b)
+
+start <- 1
+dloss <- NULL
+gloss <- NULL
+fList <- list()
+
+for (i in 1:numb) {
+  print(paste0(i, "/", numb))
+  
+  noise <- matrix(rnorm(240), nrow = 24)
+  
+  
+  fake <- gen_nn %>% predict(noise)
+  
+  #2. Combine real and fake
+  finish <- start + b - 1
+  
+  real <- training[start:finish, ]
+  
+  rows <- nrow(real)
+  
+  both <- array(0, dim = c(rows * 2, dim(real)[-1]))
+  
+  both[1:rows, ] <- fake
+  
+  both[(rows + 1):(rows * 2), ] <- real
+  
+  labels <-
+    rbind(matrix(runif(b, 0.9, 1), nrow = b), matrix(runif(b, 0, 0.1), nrow = b))
+  
+  start <- start + b
+  
+  #3. Train discriminator
+  dloss[i] <- dis_nn %>% train_on_batch(both, labels)
+  
+  #Train generator using GAN
+  fakeAsReal <- array(runif(b, 0, 0.1), dim = c(b, 1))
+  gloss[i] <- gan %>% train_on_batch(noise, fakeAsReal)
+  
+}
 ```
 
 

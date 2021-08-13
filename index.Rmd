@@ -1,7 +1,7 @@
 ---
 title: "Generative Adversarial Network"
 author: "João Vitor F Cavalcante"
-date: "11/08/2021"
+date: "13/08/2021"
 output:
   html_document:
     toc: true
@@ -47,7 +47,7 @@ log_step <- 100
 epochs <- 50
 learning_rate <- 5e-4
 
-noise <- matrix(rnorm(240), nrow = 24)
+noise <- matrix(rnorm(2400), nrow = 100)
 ```
 
 ### Generator Network
@@ -61,7 +61,7 @@ gen_nn_o <- gen_nn_i %>%
     kernel_initializer = "he_uniform",
     input_shape = noise_dim
   ) %>%
-  layer_dense(ncol(training), activation = "linear")
+  layer_dense(24, activation = "linear")
 gen_nn <- keras_model(gen_nn_i, gen_nn_o)
 
 fake <- gen_nn %>% predict(noise)
@@ -90,7 +90,7 @@ dis_nn %>%
 ```
 
 ```{r}
-gan_i <- layer_input(shape = 10)
+gan_i <- layer_input(shape = 24)
 gan_o <- gan_i %>%
   gen_nn %>%
   dis_nn
@@ -105,7 +105,7 @@ gan %>% compile(optimizer = "rmsprop", loss = "binary_crossentropy")
 ```{r}
 # TODO
 
-b <- 10
+b <- 100
 
 numb <- floor(nrow(training) / b)
 
@@ -117,7 +117,7 @@ fList <- list()
 for (i in 1:numb) {
   print(paste0(i, "/", numb))
   
-  noise <- matrix(rnorm(240), nrow = 24)
+  noise <- matrix(rnorm(2400), nrow = 100)
   
   
   fake <- gen_nn %>% predict(noise)
@@ -128,8 +128,6 @@ for (i in 1:numb) {
   real <- training[start:finish, ]
   
   rows <- nrow(real)
-  
-  both <- array(0, dim = c(rows * 2, dim(real)[-1]))
   
   both[1:rows, ] <- fake
   
@@ -146,6 +144,10 @@ for (i in 1:numb) {
   #Train generator using GAN
   fakeAsReal <- array(runif(b, 0, 0.1), dim = c(b, 1))
   gloss[i] <- gan %>% train_on_batch(noise, fakeAsReal)
+  
+  f <- fake[1,]
+  
+  print(summary(f))
   
 }
 ```
